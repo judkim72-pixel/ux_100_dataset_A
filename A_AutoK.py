@@ -83,40 +83,43 @@ COL_COMP = "Company"
 COL_AI   = "AI Adoption Index (0–5)"
 COL_DISC = "Model/Stack Disclosure"
 COL_ETH  = "Privacy/AI Ethics Policy (public Y/N)"
-COL_DES  = "GenAI in Design Operations (None/Asset/Assist/CoCreate/E2E)"
-COL_SEC  = "ISO 27001 (0/1)"
-COL_SSD  = "SecSDLC (0/1)"
-COL_SEC_M="Security Maturity (0–100)"
-COL_DS_M = "Data Science Maturity (0–100)"
-COL_AN_M = "Analytics Maturity (0–100)"
+COL_DES  = "GenAI in Design Ops"
+COL_ISO  = "ISO/IEC 27001 (Y/N)"
+COL_SSD  = "Security Review in SDLC"
+# 프록시 성숙도(0~100) 산출용 원천 컬럼
+COL_AI_ROLES = "AI Roles Present (count)"
+COL_ANALYTICS = "Analytics/Experimentation"
+COL_SECSDLC_PTS = "SecSDLC_Pts (0-6)"
+COL_ISO_PTS = "ISO27001_Pts (0/8)"
 
-missing = [c for c in [COL_COMP, COL_AI, COL_DISC, COL_ETH, COL_DES, COL_SEC, COL_SSD, COL_SEC_M, COL_DS_M, COL_AN_M] if c not in df.columns]
+missing = [c for c in [COL_COMP, COL_AI, COL_DISC, COL_ETH, COL_DES, COL_ISOYN, COL_SSDYN, COL_SEC_PTS, COL_SSD_PTS, COL_DS_PRESENT, COL_DS_OPEN, COL_ANALYTICS_PTS] if c not in df.columns]
 if missing:
     st.error("필수 컬럼이 엑셀에 없습니다: " + ", ".join(missing))
     st.stop()
 
 # 숫자 변환
 ai  = to_num(df[COL_AI])
-iso = to_num(df[COL_SEC])
-ssd = to_num(df[COL_SSD])
-secM= to_num(df[COL_SEC_M]).clip(0,100)
-dsM = to_num(df[COL_DS_M]).clip(0,100)
-anM = to_num(df[COL_AN_M]).clip(0,100)
-
 disc = binarize(df[COL_DISC])
 eth  = binarize(df[COL_ETH])
+# 보안 성숙도(0~100): ISO27001_Pts(0/8), SecSDLC_Pts(0-6) → 각 0~100 환산, 동가중 평균
+iso_pts = to_num(df[COL_SEC_PTS])
+ssd_pts = to_num(df[COL_SSD_PTS])
+sec_iso100 = (iso_pts / 8.0) * 100.0
+sec_ssd100 = (ssd_pts / 6.0) * 100.0
+secM = (sec_iso100.fillna(0) + sec_ssd100.fillna(0)) / 2.0
+# 데이터 사이언스 성숙도(0~100): AI Roles Present(count) 60% + Open Roles(Data/ML/AI) 40% (각각 데이터 내 최대값 정규화)
+roles_present = to_num(df[COL_DS_PRESENT])
+roles_open = to_num(df[COL_DS_OPEN])
+max_present = roles_present.max(skipna=True) if roles_present.notna().any() else 0
+max_open = roles_open.max(skipna=True) if roles_open.notna().any() else 0
+present100 = (roles_present / max_present * 100.0) if max_present else roles_present*0
+open100 = (roles_open / max_open * 100.0) if max_open else roles_open*0
+dsM = present100*0.6 + open100*0.4
+# 애널리틱스 성숙도(0~100): Analytics_Pts(0-5) → 0~100 환산
+an_pts = to_num(df[COL_ANALYTICS_PTS])
+anM = (an_pts / 5.0) * 100.0
 
 # DesignOps 단계 매핑
-stage_map = {
-    "none":0, "asset":1, "assist":2, "cocreate":3, "co-create":3, "co create":3, "e2e":4,
-    "0":0, "1":1, "2":2, "3":3, "4":4
-}
-def map_stage(x):
-    if pd.isna(x): return np.nan
-    xs = str(x).strip().lower()
-    return stage_map.get(xs, pd.to_numeric(xs, errors="coerce"))
-des = df[COL_DES].map(map_stage)
-des100 = (des/4.0)*100.0
 
 # 탭 구성
 tabs = st.tabs([
@@ -206,7 +209,7 @@ with tabs[2]:
 with tabs[3]:
     st.header("A4. GenAI in DesignOps 단계 vs 보안/데이터/애널리틱스 (레이더)")
     st.caption("설명: 채택 수준 3분위(상·중·하)의 **DesignOps 단계(0~4→0~100)**와 **보안·데이터·애널리틱스(0~100)** 평균 프로파일을 비교합니다.")
-    mask = ai.notna() & des100.notna() & secM.notna() & dsM.notna() & anM.notna()
+    mask = ai.notna() & des100.notna() & secM.notna() & (dsM.notna() if isinstance(dsM, pd.Series) else False) & (anM.notna() if isinstance(anM, pd.Series) else False)
     if ensure_mpl() and mask.sum() >= 3:
         q33, q66 = tertile_bounds(ai[mask])
         def bucket(v):
@@ -251,7 +254,7 @@ with tabs[3]:
         else:
             st.warning("레이더를 그릴 그룹 데이터가 충분치 않습니다.")
     else:
-        st.warning("필요 데이터가 부족합니다.")
+        st.warning("필요 데이터가 부족합니다. (DesignOps/보안/데이터/애널리틱스 프록시 컬럼을 확인하세요)")
 
 # ==== A5 ====
 with tabs[4]:
@@ -259,7 +262,7 @@ with tabs[4]:
     st.caption("설명: X=AI 채택(0–5→0–100), Y=보안 거버넌스(ISO 27001, SecSDLC 평균×100). **중앙값 기준 2×2 분할**로 위험 구역을 식별합니다.")
     if ensure_mpl():
         ai100 = (ai / (ai.max(skipna=True) if ai.max(skipna=True) else 5)) * 100.0
-        gov100 = ((iso.fillna(0) + ssd.fillna(0)) / 2.0) * 100.0
+        gov100 = secM
         m = ai100.notna() & gov100.notna()
         if m.sum() >= 2:
             x, y = ai100[m], gov100[m]
