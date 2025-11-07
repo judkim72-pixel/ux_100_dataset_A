@@ -150,13 +150,9 @@ with tabs[0]:
             ax2.set_title("박스플롯(Boxplot)")
             st.pyplot(fig2, use_container_width=True)
 
-        st.markdown(
-            f"- **중앙값(Median)**: {med:.2f}
-"
-            f"- **상위 10% 컷오프(Top 10% Cutoff)**: {p90:.2f}
-"
-            f"- **IQR(사분위 범위)**: {q1:.2f}–{q3:.2f}"
-        )
+        st.markdown(f"""- **중앙값(Median)**: {med:.2f}
+- **상위 10% 컷오프(Top 10% Cutoff)**: {p90:.2f}
+- **IQR(사분위 범위)**: {q1:.2f}–{q3:.2f}""")
         st.caption("해설: 중앙값과 IQR을 통해 대부분 기업의 채택 구간을 파악하고, 상위 10% 컷오프로 선도군을 식별할 수 있습니다.")
     else:
         st.warning("AI 채택 데이터가 부족합니다. (필요: 최소 2개 유효값)")
@@ -201,11 +197,8 @@ with tabs[2]:
         ax.set_title("윤리/프라이버시 정책 공개율 – 채택 수준별")
         st.pyplot(fig, use_container_width=True)
 
-        st.markdown(
-            "- **근거(Evidence)**: 각 기업의 정책 공개(Y/N)를 1/0으로 정규화 후, 채택 점수 3분위 그룹 평균을 비교했습니다.
-"
-            "- **해설(Commentary)**: 상위 채택군이 더 높은 공개율을 보인다면, 조직적 거버넌스가 대규모 AI 도입과 동행한다는 가설을 지지합니다."
-        )
+        st.markdown("""""- **근거(Evidence)**: 각 기업의 정책 공개(Y/N)를 1/0으로 정규화 후, 채택 점수 3분위 그룹 평균을 비교했습니다.
+- **해설(Commentary)**: 상위 채택군이 더 높은 공개율을 보인다면, 조직적 거버넌스가 대규모 AI 도입과 동행한다는 가설을 지지합니다.""""")
     else:
         st.warning("AI 채택/윤리정책 데이터가 부족합니다. (필요: 최소 3개 유효쌍)")
 
@@ -253,7 +246,7 @@ with tabs[3]:
             ax.legend(loc="lower right", bbox_to_anchor=(1.25, -0.05))
             st.pyplot(fig, use_container_width=False)
 
-            st.markdown("- **근거**: DesignOps 단계(0~4)를 0~100으로 스케일링, 나머지는 0~100 지표 그대로 평균.")
+            st.markdown("""- **근거**: DesignOps 단계(0~4)를 0~100으로 스케일링, 나머지는 0~100 지표 그대로 평균.""")
             st.caption("해설: 상위 채택군이 전반 지표에서 우수하다면, 디자인 파이프라인의 자동화·협업·보안 체계가 성숙함을 시사합니다.")
         else:
             st.warning("레이더를 그릴 그룹 데이터가 충분치 않습니다.")
