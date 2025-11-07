@@ -33,6 +33,22 @@ st.set_page_config(page_title="A 모듈: 한글 고정 대시보드", layout="wi
 EXCEL = Path(__file__).resolve().parent / "ux_100_dataset.xlsx"
 SHEET = "Data"
 
+# ==== 컬럼 상수(엑셀 Data 시트 실제 명칭) ====
+COL_COMP = "Company"
+COL_AI   = "AI Adoption Index (0–5)"
+COL_DISC = "Model/Stack Disclosure"
+COL_ETH  = "Privacy/AI Ethics Policy (public Y/N)"
+COL_DES  = "GenAI in Design Ops"
+# 보안/데이터/애널리틱스 프록시 관련
+COL_ISOYN = "ISO/IEC 27001 (Y/N)"
+COL_SSDYN = "Security Review in SDLC"
+COL_SEC_PTS = "ISO27001_Pts (0/8)"
+COL_SSD_PTS = "SecSDLC_Pts (0-6)"
+COL_DS_PRESENT = "AI Roles Present (count)"
+COL_DS_OPEN = "Open Roles (Data/ML/AI)"
+COL_ANALYTICS_PTS = "Analytics_Pts (0-5)"
+
+
 # ==== 유틸 ====
 def ensure_mpl():
     if not _MPL_OK:
