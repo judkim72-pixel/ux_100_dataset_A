@@ -255,33 +255,58 @@ with tabs[2]:
 with tabs[3]:
     st.header("A4. GenAI in DesignOps 단계 vs 보안/데이터/애널리틱스 (레이더)")
     st.caption("설명: 채택 수준 3분위(상·중·하)의 **DesignOps 단계(0~4→0~100)**와 **보안·데이터·애널리틱스(0~100)** 평균 프로파일을 비교합니다.")
-    mask_all = ai.notna() & des100.notna() & secM.notna() & dsM.notna() & anM.notna()
-    if mask_all.sum() >= 3:
-        q33, q66 = tertile_bounds(ai[mask_all])
+    # 보다 관대한 방식: 그룹은 AI 채택 값이 있는 행으로만 구성하고,
+    # 각 지표(DesignOps, Security, DataScience, Analytics)는 가능한 값만 평균합니다.
+    valid_ai = ai.dropna()
+    if len(valid_ai) >= 3:
+        # tertile 경계
+        q33, q66 = tertile_bounds(valid_ai)
         def bucket(v):
             if v < q33: return "하(Low)"
             if v < q66: return "중(Mid)"
             return "상(Top)"
-        grp = ai[mask_all].map(bucket)
+        grp_all = ai.map(lambda v: bucket(v) if pd.notna(v) else np.nan)
 
-        metrics = ["DesignOps(단계)", "Security(보안)", "DataScience(데이터)", "Analytics(애널리틱스)"]
-        prof = {}
-        for lvl in ["하(Low)","중(Mid)","상(Top)"]:
-            m = grp == lvl
-            if m.any():
-                prof[lvl] = [
-                    float(des100[mask_all][m].mean()),
-                    float(secM[mask_all][m].mean()),
-                    float(dsM[mask_all][m].mean()),
-                    float(anM[mask_all][m].mean()),
-                ]
+        metrics = [
+            ("DesignOps(단계)", des100),
+            ("Security(보안)",  secM),
+            ("DataScience(데이터)", dsM),
+            ("Analytics(애널리틱스)", anM),
+        ]
 
-        if prof:
-            cat = metrics
+        # 그룹별 평균(사용 가능한 값만)
+        prof = {"하(Low)": [], "중(Mid)": [], "상(Top)": []}
+        kept_metrics = []
+        counts = {g: [] for g in prof.keys()}
+
+        for label, series in metrics:
+            any_finite = False
+            group_means = {}
+            group_counts = {}
+            for g in ["하(Low)", "중(Mid)", "상(Top)"]:
+                m = (grp_all == g) & series.notna()
+                n = int(m.sum())
+                v = float(series[m].mean()) if n > 0 else np.nan
+                group_means[g] = v
+                group_counts[g] = n
+                if n > 0 and np.isfinite(v):
+                    any_finite = True
+            if any_finite:
+                kept_metrics.append(label)
+                for g in ["하(Low)", "중(Mid)", "상(Top)"]:
+                    prof[g].append(group_means[g] if np.isfinite(group_means[g]) else None)
+                    counts[g].append(group_counts[g])
+
+        if not kept_metrics:
+            st.warning("A4 레이더를 그릴 수 있는 유효 지표가 없습니다. (해당 지표들의 결측률이 매우 높음)")
+        else:
             fig = go.Figure()
-            for lvl, vals in prof.items():
-                fig.add_trace(go.Scatterpolar(r=vals, theta=cat, name=lvl, fill="toself",
-                                              hovertemplate="%{theta}: %{r:.1f}<extra></extra>"))
+            for g in ["하(Low)", "중(Mid)", "상(Top)"]:
+                vals = prof[g]
+                fig.add_trace(go.Scatterpolar(
+                    r=vals, theta=kept_metrics, name=g, fill="toself",
+                    connectgaps=False, hovertemplate="%{theta}: %{r:.1f}<extra></extra>"
+                ))
             fig.update_layout(
                 polar=dict(radialaxis=dict(visible=True, range=[0,100])),
                 showlegend=True,
@@ -290,14 +315,23 @@ with tabs[3]:
             )
             st.plotly_chart(fig, use_container_width=False)
 
+            # 보조 표: 각 축별 유효 표본수(N)
+            import pandas as _pd
+            n_table = _pd.DataFrame({
+                "Metric": kept_metrics,
+                "하(Low) N": counts["하(Low)"],
+                "중(Mid) N": counts["중(Mid)"],
+                "상(Top) N": counts["상(Top)"],
+            })
+            st.dataframe(n_table, use_container_width=True)
+
             st.markdown("- **근거**: DesignOps 단계(0~4)→0~100 스케일링. 보안=ISO/SecSDLC 점수 환산(0~100) 평균, 데이터=Roles Present/Open 정규화 가중합, 애널리틱스=Analytics_Pts 환산(0~100).")
-            st.caption("해설: 상위 채택군이 전반 지표에서 우수하다면, 디자인 파이프라인의 자동화·협업·보안 체계가 성숙함을 시사합니다.")
-        else:
-            st.warning("레이더를 그릴 그룹 데이터가 충분치 않습니다.")
+            st.caption("해설: 일부 지표가 결측이어도 사용 가능한 값만으로 평균을 산출합니다. 표본수가 적은 축은 하단 표에서 N을 확인하세요.")
     else:
-        st.warning("필요 데이터가 부족합니다. (DesignOps/보안/데이터/애널리틱스 프록시 컬럼을 확인하세요)")
+        st.warning("AI 채택 값이 3개 미만입니다. (A4 레이더 계산 불가)")
 
 # ==== A5 ====
+
 with tabs[4]:
     st.header("A5. AI 채택 × 보안 거버넌스 2×2 매트릭스 (버블)")
     st.caption("설명: X=AI 채택(0–5→0–100), Y=보안 거버넌스(ISO27001_Pts & SecSDLC_Pts → 0~100 평균). **중앙값 기준 2×2 분할**로 위험 구역을 식별합니다.")
