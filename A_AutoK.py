@@ -1,10 +1,10 @@
-
 # A_AutoK.py — UX 100 Dashboard (KR, Plotly, Tooltips)
 # A1: Histogram + ECDF
 # A2: Donut + disclosed company table
 # A3: Bar with 95% CI
-# A4: Radar with tolerant grouping + coverage banner
-# A5: 2x2 scatter with coverage banner + light jitter if y≈0
+# A4: Radar with tolerant grouping + coverage banner + commentary
+# A5: 2x2 scatter with coverage banner + light jitter if y≈0 + commentary
+
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -38,7 +38,8 @@ COL_DS_PRESENT = "AI Roles Present (count)"
 COL_DS_OPEN = "Open Roles (Data/ML/AI)"
 COL_ANALYTICS_PTS = "Analytics_Pts (0-5)"
 
-def to_num(s): return pd.to_numeric(s, errors="coerce")
+def to_num(s): 
+    return pd.to_numeric(s, errors="coerce")
 
 def binarize(series):
     truthy = {"y","yes","true","t","1","공개","있음","유","disclosed","open","public"}
@@ -103,7 +104,7 @@ _stage_map = {
     "none":0, "없음":0, "0":0,
     "asset":1, "에셋":1, "자산":1, "1":1,
     "assist":2, "보조":2, "지원":2, "2":2,
-    "cocreate":3, "co-create":3, "co create":3, "co‑create":3, "공동":3, "공동창작":3, "협업":3, "3":3,
+    "cocreate":3, "co-create":3, "co create":3, "co-create":3, "공동":3, "공동창작":3, "협업":3, "3":3,
     "e2e":4, "endtoend":4, "end-to-end":4, "엔드투엔드":4, "4":4
 }
 def _stage(x):
@@ -216,13 +217,12 @@ with tabs[2]:
             return "상(Top)"
         grp = ai2.map(bucket)
         rates = eth2.groupby(grp).mean().reindex(["하(Low)","중(Mid)","상(Top)"])
-        # 95% CI by group (on proportion)
-        ci = {g: ci95(eth2[grp==g]) for g in rates.index}
-        err_plus = []
-        for g in rates.index:
-            m = rates.loc[g]
-            hi = ci[g][1] if ci[g][1] == ci[g][1] else np.nan
-            err_plus.append( (hi - m) * 100 if hi == hi else 0 )
+        # 95% CI (상한만 error bar로 표시)
+        def _err_plus(g):
+            lo, hi = ci95(eth2[grp==g])
+            if np.isnan(hi): return 0
+            return (hi - rates.loc[g]) * 100
+        err_plus = [_err_plus(g) for g in rates.index]
 
         fig = go.Figure()
         fig.add_trace(go.Bar(x=rates.index, y=rates.values*100,
@@ -280,6 +280,23 @@ with tabs[3]:
                               showlegend=True, title="그룹 평균 레이더(Radar)",
                               font_family=font_family)
             st.plotly_chart(fig, use_container_width=False)
+
+            # Commentary
+            st.markdown("""
+**근거(Evidence).** DesignOps 단계(0~4→0~100), 보안(ISO27001 점수·SecSDLC 점수 또는 Y/N 대체)의 행 단위 평균, 
+데이터사이언스(채용/공개 포지션의 정규화 가중합), **애널리틱스(Analytics_Pts 0–5 → 0~100; 전부 결측이면 `Analytics/Experimentation` Y/N 대체)** 를 사용했습니다.
+
+**해설(Commentary).** 상·중·하(3분위) 그룹의 평균 프로파일 차이를 통해 
+디자인 파이프라인 성숙도와 **보안·데이터·애널리틱스 역량 간의 동행 관계**를 파악합니다. 
+축 간 격차가 작고 커버리지가 낮으면 실제 차이가 작거나 데이터가 부족한 상태일 수 있습니다.
+""")
+
+            # Analytics coverage / note
+            an_cov = float(anM.notna().mean())*100 if len(anM)>0 else 0.0
+            if an_cov < 1.0 or anM.dropna().nunique() <= 1:
+                st.info("""**애널리틱스 지표 안내** — 현재 'Analytics_Pts (0-5)' 값이 거의 없거나 단일값입니다. 
+가능하면 제품 분석/실험(AB, 페널/퍼널, 코호트, 실험 자동화 등)을 0–5 점수로 기록해 주세요. 
+점수 전부 결측일 때는 보조로 `Analytics/Experimentation`(Y/N)을 0/100으로 환산해 사용합니다.""")
         else:
             st.warning("A4 레이더를 그릴 수 있는 유효 지표가 없습니다.")
     else:
@@ -316,5 +333,16 @@ with tabs[4]:
         fig.update_traces(hovertemplate="기업: %{hovertext}<br>AI: %{x:.1f}<br>보안: %{y:.1f}<extra></extra>")
         fig.update_layout(font_family=font_family, xaxis=dict(range=[0,100]), yaxis=dict(range=[0,100]))
         st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("""
+**해석 가이드.**
+- 우상단(**Q1: 고채택·고보안**)은 **대규모 적용 준비도**가 높습니다.
+- 좌상단(**Q2: 저채택·고보안**)은 **규제·보안 요건을 갖춘 탐색 단계**로 볼 수 있습니다.
+- 좌하단(**Q3: 저채택·저보안**)은 **초기/관망** 구역입니다.
+- 우하단(**Q4: 고채택·저보안**)은 **운영·규제 리스크**가 커질 수 있어 **우선 보완 권고** 대상입니다.
+
+**근거(Evidence).** X=AI 채택(0–5를 0~100으로 정규화), Y=보안 거버넌스(ISO/SecSDLC 점수·Y/N 대체의 행 평균). 
+점군이 한 축으로 뭉치면(특히 Y축이 0 부근) 데이터 자체의 저분산/결측 영향일 수 있으며, 표시상 구분을 위해 미세한 지터만 시각적으로 적용했습니다(분석에는 영향 없음).
+""")
     else:
         st.info("2×2 매트릭스를 그릴 데이터가 부족합니다.")
