@@ -9,8 +9,13 @@ import pandas as pd
 import streamlit as st
 
 # Plotly for interactivity (hover tooltips)
-import plotly.express as px
-import plotly.graph_objects as go
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    _PLOTLY_OK = True
+except Exception as _e_plotly:
+    _PLOTLY_OK = False
+    _PLOTLY_ERR = _e_plotly
 
 # Matplotlib only for server-side font registration (optional fallback)
 try:
@@ -98,6 +103,10 @@ def load_data():
 # ==== 데이터 로드 ====
 try:
     df = load_data()
+    # Plotly presence check
+    if not _PLOTLY_OK:
+        st.error(f"Plotly가 설치되어 있지 않습니다: {_PLOTLY_ERR}. requirements.txt에 plotly를 포함하고 재배포하세요.")
+        st.stop()
 except Exception as e:
     st.error(f"데이터 로드 오류: {e}")
     st.stop()
